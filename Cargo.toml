@@ -1,0 +1,9 @@
+[package]
+name = "usbcomm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusb = "0.9"
+tokio = { version = "1.0", features = ["full"] }
+clap = { version = "4.0", features = ["derive"] }
