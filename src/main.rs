@@ -141,12 +141,12 @@ impl UsbDeviceCommunicator {
     }
 
     pub fn write_data(&mut self, data: &[u8]) -> Result<usize, rusb::Error> {
-        // Assuming endpoint 1 for writing (adjust as needed)
+        // Assuming endpoint 1 for writing
         self.handle.write_bulk(0x01, data, Duration::from_secs(1))
     }
 
     pub fn read_data(&mut self, buffer: &mut [u8]) -> Result<usize, rusb::Error> {
-        // Assuming endpoint 0x81 for reading (adjust as needed)
+        // Assuming endpoint 0x81 for reading
         self.handle.read_bulk(0x81, buffer, Duration::from_secs(1))
     }
 
@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Try to open and communicate with the device
                 if let Ok(handle) = device.open() {
                     println!("Successfully opened device handle");
-                    // You can add more communication logic here
+                    // TODO: Add communication logic here (e.g., read/write data)
                 } else {
                     println!("Failed to open device handle");
                 }
@@ -236,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         // No specific search criteria provided, list all devices
-        println!("\nNo search criteria provided. Listing all USB devices:");
+        println!("\nListing all USB devices:");
         let devices = list_usb_devices()?;
         for device in devices {
             println!("VID: 0x{:04X}, PID: 0x{:04X}, Manufacturer: {:?}, Product: {:?}, Serial: {:?}",
