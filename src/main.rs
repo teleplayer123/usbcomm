@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let devices = list_usb_devices()?;
         for device in devices {
             println!("VID: 0x{:04X}, PID: 0x{:04X}, Manufacturer: {:?}, Product: {:?}, Serial: {:?}",
-                     device.vendor_id, device.product_id, device.manufacturer, device.product, device.serial_number);
+                     device.vendor_id, device.product_id, device.manufacturer.unwrap(), device.product.unwrap(), device.serial_number);
         }
         return Ok(());
     }
@@ -202,8 +202,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Found device!");
                 let descriptor = UsbDeviceDescriptor::new(&device)?;
                 println!("Device found: VID: 0x{:04X}, PID: 0x{:04X}", descriptor.vendor_id, descriptor.product_id);
-                println!("Manufacturer: {:?}", descriptor.manufacturer);
-                println!("Product: {:?}", descriptor.product);
+                println!("Manufacturer: {:?}", descriptor.manufacturer.unwrap());
+                println!("Product: {:?}", descriptor.product.unwrap());
                 println!("Serial: {:?}", descriptor.serial_number);
 
                 // Try to open and communicate with the device
@@ -240,7 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let devices = list_usb_devices()?;
         for device in devices {
             println!("VID: 0x{:04X}, PID: 0x{:04X}, Manufacturer: {:?}, Product: {:?}, Serial: {:?}",
-                     device.vendor_id, device.product_id, device.manufacturer, device.product, device.serial_number);
+                     device.vendor_id, device.product_id, device.manufacturer.unwrap(), device.product.unwrap(), device.serial_number);
         }
     }
 
