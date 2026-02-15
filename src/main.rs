@@ -109,14 +109,19 @@ struct Cli {
     communicate: bool,
 }
 
+fn parse_hex_u16(s: &str) -> Result<u16, std::num::ParseIntError> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    u16::from_str_radix(s, 16)
+}
+
 #[derive(Args, Debug)]
 struct SearchOptions {
     /// Vendor ID to search for (hex format, e.g., 0x0483)
-    #[arg(short = 'v', long = "vendor", help = "Vendor ID in hex format (e.g., 0x0483)")]
+    #[arg(short = 'v', long = "vendor", help = "Vendor ID in hex format (e.g., 0x0483)", value_parser = parse_hex_u16)]
     vendor_id: Option<u16>,
 
     /// Product ID to search for (hex format, e.g., 0x3748)
-    #[arg(short = 'p', long = "product", help = "Product ID in hex format (e.g., 0x3748)")]
+    #[arg(short = 'p', long = "product", help = "Product ID in hex format (e.g., 0x3748)", value_parser = parse_hex_u16)]
     product_id: Option<u16>,
 
     /// Serial number to search for
