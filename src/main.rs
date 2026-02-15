@@ -1,4 +1,4 @@
-use rusb::{Device, DeviceHandle, UsbContext};
+use rusb::{Device, DeviceHandle, Context, Direction, TransferType, UsbContext};
 use std::time::Duration;
 use clap::{Parser, Args};
 
@@ -105,6 +105,8 @@ struct Cli {
     /// List all USB devices instead of searching
     #[arg(long = "list-all", help = "List all USB devices")]
     list_all: bool,
+    #[arg(long = "communicate", help = "Communicate with the found device")]
+    communicate: bool,
 }
 
 #[derive(Args, Debug)]
@@ -122,32 +124,90 @@ struct SearchOptions {
     serial: Option<String>,
 }
 
+// Define endpoint information struct
+#[derive(Clone)]
+pub struct EndpointInfo {
+    pub address: u8,
+    pub direction: Direction,
+    pub transfer_type: TransferType,
+    pub max_packet_size: u16,
+}
+
 pub struct UsbDeviceCommunicator {
-    handle: DeviceHandle<rusb::Context>,
+    handle: DeviceHandle<Context>,
     vendor_id: u16,
     product_id: u16,
+    endpoints: Vec<EndpointInfo>,
 }
 
 impl UsbDeviceCommunicator {
-    pub fn new(device: Device<rusb::Context>) -> Result<Self, rusb::Error> {
+    pub fn new(device: Device<Context>) -> Result<Self, rusb::Error> {
         let device_descriptor = device.device_descriptor()?;
         let handle = device.open()?;
+
+        // Discover endpoints dynamically
+        let endpoints = Self::discover_endpoints(&device)?;
 
         Ok(UsbDeviceCommunicator {
             handle,
             vendor_id: device_descriptor.vendor_id(),
             product_id: device_descriptor.product_id(),
+            endpoints,
         })
     }
 
+    fn discover_endpoints(device: &Device<Context>) -> Result<Vec<EndpointInfo>, rusb::Error> {
+        let mut endpoints = Vec::new();
+
+        // Get the first configuration (usually 1)
+        for config_num in 0..device.device_descriptor()?.num_configurations() {
+            if let Ok(config) = device.config_descriptor(config_num) {
+                for interface in config.interfaces() {
+                    for descriptor in interface.descriptors() {
+                        for endpoint in descriptor.endpoint_descriptors() {
+                            endpoints.push(EndpointInfo {
+                                address: endpoint.address(),
+                                direction: endpoint.direction(),
+                                transfer_type: endpoint.transfer_type(),
+                                max_packet_size: endpoint.max_packet_size(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(endpoints)
+    }
+
+    pub fn find_bulk_in_endpoint(&self) -> Option<EndpointInfo> {
+        self.endpoints.iter()
+            .find(|ep| ep.direction == Direction::In && ep.transfer_type == TransferType::Bulk)
+            .cloned()
+    }
+
+    pub fn find_bulk_out_endpoint(&self) -> Option<EndpointInfo> {
+        self.endpoints.iter()
+            .find(|ep| ep.direction == Direction::Out && ep.transfer_type == TransferType::Bulk)
+            .cloned()
+    }
+
     pub fn write_data(&mut self, data: &[u8]) -> Result<usize, rusb::Error> {
-        // Assuming endpoint 1 for writing
-        self.handle.write_bulk(0x01, data, Duration::from_secs(1))
+        if let Some(endpoint) = self.find_bulk_out_endpoint() {
+            self.handle.write_bulk(endpoint.address, data, Duration::from_secs(1))
+        } else {
+            // Fallback to hardcoded if needed
+            self.handle.write_bulk(0x01, data, Duration::from_secs(1))
+        }
     }
 
     pub fn read_data(&mut self, buffer: &mut [u8]) -> Result<usize, rusb::Error> {
-        // Assuming endpoint 0x81 for reading
-        self.handle.read_bulk(0x81, buffer, Duration::from_secs(1))
+        if let Some(endpoint) = self.find_bulk_in_endpoint() {
+            self.handle.read_bulk(endpoint.address, buffer, Duration::from_secs(1))
+        } else {
+            // Fallback to hardcoded if needed
+            self.handle.read_bulk(0x81, buffer, Duration::from_secs(1))
+        }
     }
 
     pub fn write_control(&mut self, request: u8, value: u16, index: u16, data: &[u8]) -> Result<usize, rusb::Error> {
@@ -193,10 +253,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    if cli.communicate {
+        if let (Some(vendor_id), Some(product_id)) = (cli.search_options.vendor_id, cli.search_options.product_id) {
+            let comm = UsbDeviceCommunicator::new(find_device_by_vid_pid(vendor_id, product_id)?.ok_or("Device not found")?)?;
+            println!("Communicating with device VID: 0x{:04X}, PID: 0x{:04X}", comm.vendor_id, comm.product_id);
+            let endpoints = comm.endpoints;
+            println!("Discovered endpoints:");
+            for ep in &endpoints {
+                println!("Endpoint Address: 0x{:02X}, Direction: {:?}, Transfer Type: {:?}, Max Packet Size: {}",
+                         ep.address, ep.direction, ep.transfer_type, ep.max_packet_size);
+            }
+            // TODO: Add actual communication logic here (e.g., read/write data)
+        } else {
+            println!("Please provide both vendor ID and product ID to communicate with a device.");
+        }
+
+        return Ok(());
+    }
+
     // Search for specific device
     if let (Some(vendor_id), Some(product_id)) = (cli.search_options.vendor_id, cli.search_options.product_id) {
         println!("Searching for device with VID: 0x{:04X}, PID: 0x{:04X}", vendor_id, product_id);
-
         match find_device_by_vid_pid(vendor_id, product_id)? {
             Some(device) => {
                 println!("Found device!");
@@ -205,14 +282,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Manufacturer: {:?}", descriptor.manufacturer.unwrap());
                 println!("Product: {:?}", descriptor.product.unwrap());
                 println!("Serial: {:?}", descriptor.serial_number);
-
-                // Try to open and communicate with the device
-                if let Ok(_handle) = device.open() {
-                    println!("Successfully opened device handle");
-                    // TODO: Add communication logic here (e.g., read/write data)
-                } else {
-                    println!("Failed to open device handle");
-                }
             }
             None => {
                 println!("No device found with VID: 0x{:04X}, PID: 0x{:04X}", vendor_id, product_id);
