@@ -1,3 +1,5 @@
+mod setupapi;
+
 use rusb::{Device, DeviceHandle, Direction, TransferType, UsbContext};
 use std::time::Duration;
 use clap::{Parser, Args};
@@ -92,6 +94,18 @@ pub fn find_device_by_serial(serial_number: &str) -> Result<Option<Device<rusb::
     }
 
     Ok(None)
+}
+
+#[cfg(target_os = "windows")]
+fn list_setupapi_devices() {
+    let devices = setupapi::list_all_usb_devices();
+
+    for dev in devices {
+        println!(
+            "VID: {:04X}, PID: {:04X}, {}",
+            dev.vid, dev.pid, dev.instance_id
+        );
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -271,6 +285,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("VID: 0x{:04X}, PID: 0x{:04X}, Manufacturer: {:?}, Product: {:?}, Serial: {:?}",
                      device.vendor_id, device.product_id, device.manufacturer.unwrap(), device.product.unwrap(), device.serial_number);
         }
+        #[cfg(target_os = "windows")]
+        list_setupapi_devices();
+        
         return Ok(());
     }
 
