@@ -183,7 +183,6 @@ pub struct UsbDeviceCommunicator {
 impl UsbDeviceCommunicator {
     pub fn new(device: Device<rusb::Context>) -> Result<Self, rusb::Error> {
         let handle = device.open()?;
-        let device_descriptor = device.device_descriptor()?;
 
         // Enumerate endpoints
         let mut endpoints = Vec::new();
@@ -287,7 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(target_os = "windows")]
         list_setupapi_devices();
-        
+
         return Ok(());
     }
 

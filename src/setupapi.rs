@@ -2,6 +2,8 @@
 use windows::core::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::Devices::DeviceAndDriverInstallation::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::*;
 
 #[cfg(target_os = "windows")]
 pub struct SetupUsbDevice {
@@ -31,39 +33,44 @@ pub fn list_all_usb_devices() -> Vec<SetupUsbDevice> {
             let mut device_info = SP_DEVINFO_DATA::default();
             device_info.cbSize = std::mem::size_of::<SP_DEVINFO_DATA>() as u32;
 
-            if !SetupDiEnumDeviceInfo(device_info_set, index, &mut device_info).as_bool() {
-                break;
+            match SetupDiEnumDeviceInfo(device_info_set, index, &mut device_info) {
+                Ok(_) => (),
+                Err(e) if e.code() == ERROR_NO_MORE_ITEMS.into() => break,
+                Err(_) => break,
             }
 
             let mut buffer = [0u16; 512];
             let mut required_size = 0;
 
-            if SetupDiGetDeviceInstanceIdW(
+            match SetupDiGetDeviceInstanceIdW(
                 device_info_set,
                 &device_info,
-                &mut buffer,
-                &mut required_size,
-            )
-            .as_bool()
-            {
-                let instance_id =
-                    String::from_utf16_lossy(&buffer[..required_size as usize - 1]);
+                Some(&mut buffer),
+                Some(&mut required_size),
+            ) {
+                Ok(_) => {
+                    let instance_id =
+                        String::from_utf16_lossy(&buffer[..required_size as usize - 1]);
 
-                if instance_id.starts_with("USB\\VID_") {
-                    if let Some((vid, pid)) = parse_vid_pid(&instance_id) {
-                        devices.push(SetupUsbDevice {
-                            vid,
-                            pid,
-                            instance_id,
-                        });
+                    if instance_id.starts_with("USB\\VID_") {
+                        if let Some((vid, pid)) = parse_vid_pid(&instance_id) {
+                            devices.push(SetupUsbDevice {
+                                vid,
+                                pid,
+                                instance_id,
+                            });
+                        }
                     }
+                },
+                Err(_) => {
+                    index += 1;
+                    continue;
                 }
             }
-
             index += 1;
         }
 
-        SetupDiDestroyDeviceInfoList(device_info_set);
+        let _ = SetupDiDestroyDeviceInfoList(device_info_set);
 
         devices
     }
