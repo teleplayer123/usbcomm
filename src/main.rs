@@ -162,7 +162,6 @@ impl std::fmt::Display for EndpointInfo {
 }
 
 pub struct UsbDeviceCommunicator {
-    device: Device<rusb::Context>,
     handle: DeviceHandle<rusb::Context>,
     endpoints: Vec<EndpointInfo>,
 }
@@ -190,7 +189,6 @@ impl UsbDeviceCommunicator {
         }
 
         Ok(UsbDeviceCommunicator {
-            device,
             handle,
             endpoints,
         })
@@ -219,8 +217,7 @@ impl UsbDeviceCommunicator {
         self.handle.write_bulk(endpoint.address, data, Duration::from_secs(1))
     }
 
-    pub fn read_control(&self, request_type: u8, request: u8, value: u16, index: u16, length: usize) -> Result<Vec<u8>,
-rusb::Error> {
+    pub fn read_control(&self, request_type: u8, request: u8, value: u16, index: u16, length: usize) -> Result<Vec<u8>, rusb::Error> {
         let mut buffer = vec![0u8; length];
         let actual_length = self.handle.read_control(
             request_type,
@@ -234,8 +231,7 @@ rusb::Error> {
         Ok(buffer)
     }
 
-    pub fn write_control(&self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8]) -> Result<usize,
-rusb::Error> {
+    pub fn write_control(&self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8]) -> Result<usize, rusb::Error> {
         self.handle.write_control(
             request_type,
             request,
