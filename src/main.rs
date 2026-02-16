@@ -42,6 +42,18 @@ fn get_string_descriptor(handle: &DeviceHandle<rusb::Context>, index: Option<u8>
     })
 }
 
+#[cfg(target_os = "windows")]
+fn list_setupapi_devices() {
+    let devices = setupapi::list_all_usb_devices();
+
+    for dev in devices {
+        println!(
+            "VID: 0x{:04X}, PID: 0x{:04X}, {}",
+            dev.vid, dev.pid, dev.instance_id
+        );
+    }
+}
+
 pub fn list_usb_devices() -> Result<Vec<UsbDeviceDescriptor>, rusb::Error> {
     let context = rusb::Context::new()?;
     let devices = context.devices()?;
@@ -94,18 +106,6 @@ pub fn find_device_by_serial(serial_number: &str) -> Result<Option<Device<rusb::
     }
 
     Ok(None)
-}
-
-#[cfg(target_os = "windows")]
-fn list_setupapi_devices() {
-    let devices = setupapi::list_all_usb_devices();
-
-    for dev in devices {
-        println!(
-            "VID: {:04X}, PID: {:04X}, {}",
-            dev.vid, dev.pid, dev.instance_id
-        );
-    }
 }
 
 #[derive(Parser, Debug)]
@@ -270,6 +270,8 @@ mod tests {
         for device in devices.clone().unwrap_or_default() {
             println!("Found device: {:?}", device);
         }
+        #[cfg(target_os = "windows")]
+        list_setupapi_devices();
         assert!(devices.is_ok());
     }
 }
