@@ -37,6 +37,7 @@ pub struct App {
     pub scroll_offset: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Message {
     Info(String),
