@@ -1,22 +1,18 @@
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    Command,
 };
-use std::{
-    io,
-    time::{Duration, Instant},
-};
-use crate::{UsbDeviceDescriptor, EndpointInfo};
+use std::io;
+use crate::UsbDeviceDescriptor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
@@ -41,11 +37,11 @@ pub struct App {
     pub scroll_offset: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Message {
     Info(String),
-    Error(String),
     Warning(String),
+    Error(String),
 }
 
 impl App {
@@ -73,9 +69,6 @@ impl App {
         }
     }
 
-    pub fn clear_messages(&mut self) {
-        self.messages.clear();
-    }
 }
 
 pub fn run_app() -> Result<(), Box<dyn std::error::Error>> {
@@ -245,7 +238,7 @@ fn list_devices_view(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) 
     frame.render_widget(device_list, area);
 }
 
-fn search_view(frame: &mut Frame, area: ratatui::Rect, app: &App) {
+fn search_view(frame: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -273,7 +266,7 @@ fn search_view(frame: &mut Frame, area: ratatui::Rect, app: &App) {
     frame.render_widget(help_text, chunks[3]);
 }
 
-fn communicate_view(frame: &mut Frame, area: ratatui::Rect, app: &App) {
+fn communicate_view(frame: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

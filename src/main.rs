@@ -114,6 +114,10 @@ pub fn find_device_by_serial(serial_number: &str) -> Result<Option<Device<rusb::
 #[command(version = "1.0")]
 #[command(about = "USB device communicator with CLI support", long_about = None)]
 struct Cli {
+    /// Use TUI mode (default)
+    #[arg(short = 't', long = "tui", help = "Use terminal UI mode")]
+    tui: bool,
+
     #[command(flatten)]
     search_options: SearchOptions,
 
@@ -279,6 +283,11 @@ mod tests {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+
+    // Use TUI mode by default or when explicitly requested
+    if cli.tui {
+        return tui::run_app();
+    }
 
     if cli.list_all {
         println!("\nListing all USB devices:");
