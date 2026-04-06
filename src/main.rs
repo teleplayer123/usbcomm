@@ -1,4 +1,5 @@
 mod setupapi;
+mod tui;
 
 use rusb::{Device, DeviceHandle, Direction, TransferType, UsbContext};
 use std::time::Duration;
