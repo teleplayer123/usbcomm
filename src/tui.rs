@@ -4,8 +4,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
 };
 use std::io::{self, Read, Write};
-use usb::{Device, DeviceDescriptor, UsbDeviceCommunicator, UsbDeviceDescriptor as UsbDeviceDescriptor};
+use std::time::Duration;
 use clap::Args;
+use rusb::{Device, DeviceHandle, Direction, TransferType, UsbContext};
 
 #[derive(Debug, Clone)]
 pub struct TuiDeviceDescriptor {
@@ -406,24 +407,5 @@ pub fn run() -> io::Result<()> {
                 }
             }
         }
-    }
-}
-
-pub mod search_options {
-    use clap::Args;
-
-    #[derive(Args, Debug, Clone)]
-    pub struct TuiSearchOptions {
-        /// Vendor ID to search for (hex format, e.g., 0x0483)
-        #[arg(short = 'v', long = "vendor", help = "Vendor ID in hex format (e.g., 0x0483)", value_parser = super::parse_hex_u16)]
-        pub vendor_id: Option<u16>,
-
-        /// Product ID to search for (hex format, e.g., 0x3748)
-        #[arg(short = 'p', long = "product", help = "Product ID in hex format (e.g., 0x3748)", value_parser = super::parse_hex_u16)]
-        pub product_id: Option<u16>,
-
-        /// Serial number to search for
-        #[arg(short = 's', long = "serial", help = "Serial number to search for")]
-        pub serial: Option<String>,
     }
 }

@@ -12,4 +12,4 @@ windows = { version = "0.54", features = [
     "Win32_Foundation",
     "Win32_System_Registry"
 ] }
-ratatui = "0.16"
+ratatui = "0.30"
