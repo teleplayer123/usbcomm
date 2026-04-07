@@ -1,9 +1,15 @@
-mod setupapi;
-
-use rusb::{Device, DeviceHandle, Direction, TransferType, UsbContext};
+use rusb::{Device, DeviceHandle, Direction, TransferType, Context, UsbContext};
 use std::time::Duration;
 use clap::Args;
 use clap::Parser;
+
+pub mod tui;
+
+#[cfg(target_os = "windows")]
+pub mod setupapi;
+
+pub type UsbDevice = Device<Context>;
+pub type UsbHandle = DeviceHandle<Context>;
 
 #[derive(Debug, Clone)]
 pub struct UsbDeviceDescriptor {
@@ -17,11 +23,12 @@ pub struct UsbDeviceDescriptor {
 }
 
 impl UsbDeviceDescriptor {
-    pub fn new(handle: &DeviceHandle<UsbContext>) -> Result<Self, rusb::Error> {
-        let device_descriptor = handle.device_descriptor()?;
-        let manufacturer = get_string_descriptor(handle, device_descriptor.manufacturer_string_index());
-        let product = get_string_descriptor(handle, device_descriptor.product_string_index());
-        let serial_number = get_string_descriptor(handle, device_descriptor.serial_number_string_index());
+    pub fn new(device: &UsbDevice) -> Result<Self, rusb::Error> {
+        let handle = device.open()?;
+        let device_descriptor = device.device_descriptor()?;
+        let manufacturer = get_string_descriptor(&handle, device_descriptor.manufacturer_string_index());
+        let product = get_string_descriptor(&handle, device_descriptor.product_string_index());
+        let serial_number = get_string_descriptor(&handle, device_descriptor.serial_number_string_index());
 
         Ok(UsbDeviceDescriptor {
             vendor_id: device_descriptor.vendor_id(),
@@ -29,15 +36,15 @@ impl UsbDeviceDescriptor {
             manufacturer,
             product,
             serial_number,
-            bus_number: handle.device().bus_number(),
-            device_address: handle.device().address(),
+            bus_number: device.bus_number(),
+            device_address: device.address(),
         })
     }
 }
 
-fn get_string_descriptor(handle: &DeviceHandle<UsbContext>, index: Option<u8>) -> Option<String> {
-    index.map(|idx| {
-        handle.read_string_descriptor_ascii(idx).unwrap_or_else(|_| String::from("Unknown"))
+fn get_string_descriptor(handle: &UsbHandle, index: Option<u8>) -> Option<String> {
+    index.and_then(|idx| {
+        handle.read_string_descriptor_ascii(idx).ok()
     })
 }
 
@@ -69,7 +76,7 @@ impl std::fmt::Display for EndpointInfo {
     }
 }
 
-pub fn get_endpoints(handle: &DeviceHandle<UsbContext>) -> Vec<EndpointInfo> {
+pub fn get_endpoints(handle: &UsbHandle) -> Vec<EndpointInfo> {
     let mut endpoints = Vec::new();
     if let Ok(config_descriptor) = handle.device().config_descriptor(0) {
         for interface in config_descriptor.interfaces() {
@@ -89,12 +96,12 @@ pub fn get_endpoints(handle: &DeviceHandle<UsbContext>) -> Vec<EndpointInfo> {
 }
 
 pub struct UsbDeviceCommunicator {
-    handle: DeviceHandle<UsbContext>,
+    handle: UsbHandle,
     endpoints: Vec<EndpointInfo>,
 }
 
 impl UsbDeviceCommunicator {
-    pub fn new(handle: DeviceHandle<UsbContext>) -> Result<Self, rusb::Error> {
+    pub fn new(handle: UsbHandle) -> Result<Self, rusb::Error> {
         let endpoints = get_endpoints(&handle);
 
         Ok(UsbDeviceCommunicator {
@@ -104,7 +111,6 @@ impl UsbDeviceCommunicator {
     }
 
     pub fn read_data(&self, length: usize) -> Result<Vec<u8>, rusb::Error> {
-        // Find bulk IN endpoint
         let endpoint = self.endpoints
             .iter()
             .find(|ep| ep.direction == Direction::In && ep.transfer_type == TransferType::Bulk)
@@ -117,7 +123,6 @@ impl UsbDeviceCommunicator {
     }
 
     pub fn write_data(&self, data: &[u8]) -> Result<usize, rusb::Error> {
-        // Find bulk OUT endpoint
         let endpoint = self.endpoints
             .iter()
             .find(|ep| ep.direction == Direction::Out && ep.transfer_type == TransferType::Bulk)
@@ -157,12 +162,12 @@ impl UsbDeviceCommunicator {
 }
 
 pub fn list_usb_devices() -> Result<Vec<UsbDeviceDescriptor>, rusb::Error> {
-    let context = rusb::Context::new()?;
+    let context = Context::new()?;
     let devices = context.devices()?;
     let mut device_list = Vec::new();
 
     for device in devices.iter() {
-        match UsbDeviceDescriptor::new(device) {
+        match UsbDeviceDescriptor::new(&device) {
             Ok(descriptor) => {
                 device_list.push(descriptor);
             }
@@ -175,8 +180,8 @@ pub fn list_usb_devices() -> Result<Vec<UsbDeviceDescriptor>, rusb::Error> {
     Ok(device_list)
 }
 
-pub fn find_device_by_vid_pid(vendor_id: u16, product_id: u16) -> Result<Option<Device<UsbContext>>, rusb::Error> {
-    let context = rusb::Context::new()?;
+pub fn find_device_by_vid_pid(vendor_id: u16, product_id: u16) -> Result<Option<UsbDevice>, rusb::Error> {
+    let context = Context::new()?;
     let devices = context.devices()?;
 
     for device in devices.iter() {
@@ -189,8 +194,8 @@ pub fn find_device_by_vid_pid(vendor_id: u16, product_id: u16) -> Result<Option<
     Ok(None)
 }
 
-pub fn find_device_by_serial(serial_number: &str) -> Result<Option<Device<UsbContext>>, rusb::Error> {
-    let context = rusb::Context::new()?;
+pub fn find_device_by_serial(serial_number: &str) -> Result<Option<UsbDevice>, rusb::Error> {
+    let context = Context::new()?;
     let devices = context.devices()?;
 
     for device in devices.iter() {
@@ -209,60 +214,35 @@ pub fn find_device_by_serial(serial_number: &str) -> Result<Option<Device<UsbCon
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "usb_device_communicator")]
-#[command(version = "1.0")]
+#[command(name = "usbcomm")]
+#[command(version = "0.1.0")]
 #[command(about = "USB device communicator with CLI and TUI support", long_about = None)]
 pub struct Cli {
     #[command(flatten)]
     pub search_options: SearchOptions,
 
-    /// List all USB devices instead of searching
     #[arg(long = "list-all", help = "List all USB devices")]
     pub list_all: bool,
 
-    /// Run in TUI mode
     #[arg(long = "tui", help = "Run in TUI mode", conflicts_with_all = &["list_all"])]
     pub tui: bool,
-
-    /// Data to write (hex format, e.g., 0x010203)
-    #[arg(long = "write", help = "Data to write in hex format (e.g., 0x010203)")]
-    pub write_data: Option<String>,
-
-    /// Number of bytes to read
-    #[arg(long = "read", help = "Number of bytes to read")]
-    pub read_bytes: Option<usize>,
 }
 
 #[derive(Args, Debug)]
 pub struct SearchOptions {
-    /// Vendor ID to search for (hex format, e.g., 0x0483)
     #[arg(short = 'v', long = "vendor", help = "Vendor ID in hex format (e.g., 0x0483)", value_parser = parse_hex_u16)]
     pub vendor_id: Option<u16>,
 
-    /// Product ID to search for (hex format, e.g., 0x3748)
     #[arg(short = 'p', long = "product", help = "Product ID in hex format (e.g., 0x3748)", value_parser = parse_hex_u16)]
     pub product_id: Option<u16>,
 
-    /// Serial number to search for
     #[arg(short = 's', long = "serial", help = "Serial number to search for")]
     pub serial: Option<String>,
 }
 
+
 #[cfg(target_os = "windows")]
 pub fn list_setupapi_devices() {
-    use windows::Win32::Devices::DeviceAndDriverInstallation::SetupAPI;
-    use windows::Win32::Foundation::HWND;
-
-    let mut handle = SetupAPI::CM_Get_Device_List(None, None).ok();
-    while let Some(dev_info) = handle {
-        let instance_id = dev_info.get_class_guid().ok().and_then(|c| {
-            SetupAPI::CM_Get_Device_IDA(Some(c.into_raw()), None, 256, 0).ok()
-        });
-
-        if let Ok(id) = instance_id {
-            println!("VID: 0x{:04X}, PID: 0x{:04X}, {}", dev_info.vid, dev_info.pid, id);
-        }
-
-        handle = dev_info.next().ok();
-    }
+    // Windows-specific device enumeration via SetupAPI
+    // This is a placeholder for Windows device integration
 }
